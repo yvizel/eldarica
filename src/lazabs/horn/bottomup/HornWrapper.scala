@@ -387,6 +387,8 @@ class HornWrapper(constraints  : Seq[HornClause],
                                  startDelay = 5000)).result
   }
 
+  def givemeUnsimplifiedClauses(): Seq[Clause] = unsimplifiedClauses
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////

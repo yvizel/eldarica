@@ -114,7 +114,76 @@ class IncrementalHornPredAbs
 
     val cegar = new CEGAR(context, predStore,
                           predicateGenerator, counterexampleMethod)
-    cegar.rawResult
+
+    cegar.rawResult;
   }
 
+  def conj2Horn(p: Predicate, conj : Conjunction) : IFormula = {
+    val context = new DelegatingHornPredAbsContext(baseContext)
+    val predStore = new PredicateStore(context)
+    import predStore._
+
+    predStore.addIPredicates(initialPredicates)
+
+    convertToInputAbsy(p, List(conj)).head
+  }
+
+  def checkWithSubstitution2(subst: Map[Predicate, Conjunction])
+  : (Either[Map[Predicate, Conjunction],
+    Dag[(IAtom, CC)]],
+    Either[Map[Predicate, IFormula],
+      Dag[(IAtom, CC)]])= {
+
+    assert((subst.keys forall substitutableSyms) &&
+      (subst forall { case (p, c) =>
+        c.constants.isEmpty &&
+          (c.variables forall { v => v.index < p.arity })
+      }))
+
+    val rsSubst =
+      (for ((p, c) <- subst) yield (baseContext.relationSymbols(p), c)).toMap
+
+    val context = new DelegatingHornPredAbsContext(baseContext) {
+      override val relationSymbols =
+        baseContext.relationSymbols -- subst.keys
+
+      override val normClauses =
+        for ((clause, cc) <- baseContext.normClauses;
+             newClause = clause substituteRS rsSubst;
+             if !newClause.constraint.isFalse)
+        yield (newClause, cc)
+
+      if (lazabs.GlobalParameters.get.log)
+        println("Testing substitution, remaining clauses: " + normClauses.size)
+
+      override val relationSymbolOccurrences = computeRSOccurrences
+      override val hasher = createHasher
+      override val clauseHashIndexes = computeClauseHashIndexes
+
+      // TODO: run AI again?
+    }
+
+    // TODO: can we sometimes reuse predicates?
+
+    val predStore = new PredicateStore(context)
+    import predStore._
+
+    predStore.addIPredicates(initialPredicates)
+
+    val cegar = new CEGAR(context, predStore,
+      predicateGenerator, counterexampleMethod)
+
+    val rawResult = cegar.rawResult;
+
+    lazy val result: Either[Map[Predicate, IFormula],
+      Dag[(IAtom, CC)]] = rawResult match {
+      case Left(solution) =>
+        Left(for ((p, c) <- solution)
+          yield (p, convertToInputAbsy(p, List(c)).head))
+      case Right(trace) =>
+        Right(trace)
+    }
+
+    (rawResult, result);
+  }
 }

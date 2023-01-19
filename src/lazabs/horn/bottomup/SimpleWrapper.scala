@@ -31,12 +31,11 @@ package lazabs.horn.bottomup
 
 import lazabs.{GlobalParameters, ParallelComputation}
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
-import lazabs.horn.abstractions.{StaticAbstractionBuilder, AbstractionRecord,
-                                 InitPredicateVerificationHints}
-
+import lazabs.horn.abstractions.{AbstractionRecord, InitPredicateVerificationHints, StaticAbstractionBuilder}
 import ap.parser._
 import ap.terfor.preds.Predicate
 import Util._
+import ap.terfor.conjunctions.Conjunction
 
 /**
  * Simple wrapper around the classes that can be used to
@@ -105,6 +104,61 @@ object SimpleWrapper {
           case Right(x) => Right(() => backTranslator translate x)
         }
       }}}
+  }
+
+  def givemeIncSolver(clauses: Iterable[HornClauses.Clause],
+                      initialPredicates: Map[Predicate, Seq[IFormula]],
+                      substitutableSyms : Set[Predicate]) :
+          IncrementalHornPredAbs[HornClauses.Clause] = {
+    new IncrementalHornPredAbs(clauses,
+      initialPredicates,
+      substitutableSyms,
+      DagInterpolator.interpolatingPredicateGenCEXAndOr _);
+  }
+
+  def incSolve(clauses: Iterable[HornClauses.Clause],
+               initialPredicates: Map[Predicate, Seq[IFormula]],
+               substitutableSyms: Set[Predicate],
+               subs : Map[Predicate, Conjunction],
+               debuggingOutput : Boolean) :
+  (Either[Map[Predicate, IFormula],
+                     Dag[(IAtom, HornClauses.Clause)]],
+               Either[Map[Predicate, Conjunction],
+                    Dag[(IAtom, HornClauses.Clause)]]) = {
+
+    val solver = new IncrementalHornPredAbs(clauses,
+      initialPredicates,
+      substitutableSyms,
+      DagInterpolator.interpolatingPredicateGenCEXAndOr _);
+
+    val (rawRes, res) = solver.checkWithSubstitution2(subs)
+    (res, rawRes)
+//    val errOutput =
+//      if (debuggingOutput) Console.err else HornWrapper.NullStream
+//
+//    Console.withErr(errOutput) {
+//      Console.withOut(Console.err) {
+//        var (newClauses, allHints, backTranslator) = {
+//          val preprocessor = new DefaultPreprocessor
+//          val hints = new InitPredicateVerificationHints(initialPredicates)
+//          preprocessor.process(clauses.toSeq, hints)
+//        }
+//
+//
+//        val (rawRes, res) = solver.checkWithSubstitution2(subs);
+//
+//        val res2 = res match {
+//          case Left(x) => Left(() => backTranslator translate x)
+//          case Right(x) => Right(() => backTranslator translate x)
+//        }
+//        (res, rawRes)
+//      }
+//    }
+  }
+
+  def subWithPredArgs(f: IFormula, pred: IAtom
+              ): IFormula = {
+    ap.parser.IExpression.subst(f, pred.args.toList, 0)
   }
 
   /**
